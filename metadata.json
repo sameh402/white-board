@@ -1,0 +1,5 @@
+{
+  "name": "ExpoWhiteboard",
+  "description": "A feature-rich mobile-first whiteboard with drawing tools, sticky notes, multi-page support, and a shake-to-clear gesture.",
+  "requestFramePermissions": []
+}
