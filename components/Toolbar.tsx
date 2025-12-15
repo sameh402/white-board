@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
+import { View, TouchableOpacity, Text, ScrollView, StyleSheet } from 'react-native';
 import { ToolType, Page } from '../types';
-import { Pen, Square, Circle, Minus, StickyNote, Eraser, Plus, ChevronLeft, ChevronRight, Save, Download } from 'lucide-react';
+import { Pen, Square, Circle, Minus, StickyNote, Eraser, Plus, ChevronLeft, ChevronRight, Save, Download } from 'lucide-react-native';
 
 interface ToolbarProps {
   currentTool: ToolType;
@@ -12,7 +13,7 @@ interface ToolbarProps {
   onPrevPage: () => void;
   onSave: () => void;
   onDownloadPDF: () => void;
-  onClearPage: () => void; // Trigger for shake/clear logic
+  onClearPage: () => void;
   currentPageIndex: number;
   activePageId: string;
   pages: Page[];
@@ -38,161 +39,210 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 }) => {
   return (
     <>
-      {/* Top Bar: Pages & Save */}
-      <div className="absolute top-0 left-0 right-0 h-14 bg-white/90 backdrop-blur-sm border-b border-gray-200 flex items-center justify-between px-4 z-50">
-        <div className="flex items-center space-x-2">
-           <button 
-             onClick={onSave}
-             className="p-2 rounded-full hover:bg-gray-100 text-gray-700 flex items-center gap-2"
-             title="Save Notebook"
-           >
-             <Save size={20} />
-           </button>
-           <button 
-             onClick={onDownloadPDF}
-             className="p-2 rounded-full hover:bg-gray-100 text-gray-700 flex items-center gap-2"
-             title="Download PDF"
-           >
-             <Download size={20} />
-           </button>
-        </div>
+      {/* Top Bar */}
+      <View style={styles.topBar}>
+        <View style={styles.topGroup}>
+           <TouchableOpacity onPress={onSave} style={styles.iconBtn}>
+             <Save size={24} color="#374151" />
+           </TouchableOpacity>
+           <TouchableOpacity onPress={onDownloadPDF} style={styles.iconBtn}>
+             <Download size={24} color="#374151" />
+           </TouchableOpacity>
+        </View>
 
-        {/* Center: Page Controls / Page Title */}
-        <div className="flex items-center bg-gray-100 rounded-full px-1 py-1">
-          <button 
-            onClick={onPrevPage} 
-            disabled={currentPageIndex === 0}
-            className="p-1.5 rounded-full disabled:opacity-30 hover:bg-gray-200 text-gray-600 transition-colors"
-          >
-            <ChevronLeft size={18} />
-          </button>
+        <View style={styles.pageControls}>
+          <TouchableOpacity onPress={onPrevPage} disabled={currentPageIndex === 0} style={[styles.navBtn, currentPageIndex === 0 && styles.disabled]}>
+            <ChevronLeft size={20} color="#4b5563" />
+          </TouchableOpacity>
           
-          <button 
-            onClick={onTogglePageList}
-            className="flex items-center gap-2 px-3 py-1 hover:bg-white rounded-md mx-1 transition-all"
-          >
-             <span className="text-sm font-semibold text-gray-800 max-w-[100px] sm:max-w-[200px] truncate">
+          <TouchableOpacity onPress={onTogglePageList} style={styles.pageInfo}>
+             <Text style={styles.pageTitle} numberOfLines={1}>
                {pages[currentPageIndex]?.name || `Page ${currentPageIndex + 1}`}
-             </span>
-             <span className="text-xs text-gray-500 font-mono bg-gray-200 px-1.5 rounded-sm">
+             </Text>
+             <Text style={styles.pageCount}>
                 {currentPageIndex + 1}/{pages.length}
-             </span>
-          </button>
+             </Text>
+          </TouchableOpacity>
 
-          <button 
-            onClick={onNextPage} 
-            disabled={currentPageIndex === pages.length - 1}
-            className="p-1.5 rounded-full disabled:opacity-30 hover:bg-gray-200 text-gray-600 transition-colors"
-          >
-            <ChevronRight size={18} />
-          </button>
-        </div>
+          <TouchableOpacity onPress={onNextPage} disabled={currentPageIndex === pages.length - 1} style={[styles.navBtn, currentPageIndex === pages.length - 1 && styles.disabled]}>
+            <ChevronRight size={20} color="#4b5563" />
+          </TouchableOpacity>
+        </View>
         
-        <div className="flex items-center">
-            <button onClick={onAddPage} className="p-2 text-blue-600 hover:bg-blue-50 rounded-full">
-                <Plus size={22} />
-            </button>
-        </div> 
-      </div>
+        <View style={styles.topGroup}>
+            <TouchableOpacity onPress={onAddPage} style={styles.addBtn}>
+                <Plus size={24} color="#2563eb" />
+            </TouchableOpacity>
+        </View> 
+      </View>
 
       {/* Bottom Bar: Tools */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur shadow-xl rounded-2xl px-4 py-3 flex flex-col gap-3 z-50 border border-gray-100 max-w-[95vw]">
-        
-        {/* Tools Row */}
-        <div className="flex items-center space-x-4 justify-between">
-          <ToolBtn active={currentTool === 'pen'} onClick={() => setTool('pen')} icon={<Pen size={20} />} />
-          <ToolBtn active={currentTool === 'rect'} onClick={() => setTool('rect')} icon={<Square size={20} />} />
-          <ToolBtn active={currentTool === 'circle'} onClick={() => setTool('circle')} icon={<Circle size={20} />} />
-          <ToolBtn active={currentTool === 'line'} onClick={() => setTool('line')} icon={<Minus size={20} />} />
-          <div className="w-px h-8 bg-gray-200 mx-1"></div>
-          <ToolBtn active={currentTool === 'note'} onClick={() => setTool('note')} icon={<StickyNote size={20} />} />
-          
-          {/* Eraser with Long Press */}
+      <View style={styles.bottomBar}>
+        <View style={styles.toolRow}>
+          <ToolBtn active={currentTool === 'pen'} onPress={() => setTool('pen')} icon={<Pen size={20} color={currentTool === 'pen' ? '#fff' : '#6b7280'} />} />
+          <ToolBtn active={currentTool === 'rect'} onPress={() => setTool('rect')} icon={<Square size={20} color={currentTool === 'rect' ? '#fff' : '#6b7280'} />} />
+          <ToolBtn active={currentTool === 'circle'} onPress={() => setTool('circle')} icon={<Circle size={20} color={currentTool === 'circle' ? '#fff' : '#6b7280'} />} />
+          <ToolBtn active={currentTool === 'line'} onPress={() => setTool('line')} icon={<Minus size={20} color={currentTool === 'line' ? '#fff' : '#6b7280'} />} />
+          <View style={styles.separator} />
+          <ToolBtn active={currentTool === 'note'} onPress={() => setTool('note')} icon={<StickyNote size={20} color={currentTool === 'note' ? '#fff' : '#6b7280'} />} />
           <ToolBtn 
             active={currentTool === 'eraser'} 
-            onClick={() => setTool('eraser')} 
+            onPress={() => setTool('eraser')} 
             onLongPress={() => {
-              // Switch to eraser AND trigger clear
               setTool('eraser');
               onClearPage();
             }}
-            icon={<Eraser size={20} />} 
+            icon={<Eraser size={20} color={currentTool === 'eraser' ? '#fff' : '#6b7280'} />} 
           />
-        </div>
+        </View>
 
-        {/* Colors Row (Only if not Eraser or Note) */}
         {currentTool !== 'eraser' && currentTool !== 'note' && (
-          <div className="flex items-center justify-center space-x-3 pt-1 border-t border-gray-100">
+          <View style={styles.colorRow}>
              {COLORS.map(c => (
-               <button
+               <TouchableOpacity
                  key={c}
-                 onClick={() => setColor(c)}
-                 className={`w-6 h-6 rounded-full transition-transform ${currentColor === c ? 'scale-125 ring-2 ring-gray-400' : 'hover:scale-110'}`}
-                 style={{ backgroundColor: c }}
+                 onPress={() => setColor(c)}
+                 style={[
+                    styles.colorDot, 
+                    { backgroundColor: c }, 
+                    currentColor === c && styles.colorActive
+                 ]}
                />
              ))}
-          </div>
+          </View>
         )}
-      </div>
+      </View>
     </>
   );
 };
 
 interface ToolBtnProps {
   active: boolean;
-  onClick: () => void;
+  onPress: () => void;
   onLongPress?: () => void;
   icon: React.ReactNode;
 }
 
-const ToolBtn: React.FC<ToolBtnProps> = ({ active, onClick, onLongPress, icon }) => {
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isLongPressed = useRef(false);
+const ToolBtn: React.FC<ToolBtnProps> = ({ active, onPress, onLongPress, icon }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    onLongPress={onLongPress}
+    delayLongPress={600}
+    style={[styles.toolBtn, active && styles.toolBtnActive]}
+  >
+    {icon}
+  </TouchableOpacity>
+);
 
-  const handlePointerDown = (e: React.PointerEvent) => {
-    isLongPressed.current = false;
-    // Start timer for long press
-    if (onLongPress) {
-      timerRef.current = setTimeout(() => {
-        isLongPressed.current = true;
-        // Provide tactile feedback if available (vibration)
-        if (navigator.vibrate) navigator.vibrate(50);
-        onLongPress();
-      }, 600); // 600ms hold time
-    }
-  };
-
-  const handlePointerUp = (e: React.PointerEvent) => {
-    // Clear timer
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    // Only trigger click if it wasn't a long press
-    if (!isLongPressed.current) {
-      onClick();
-    }
-  };
-
-  const handlePointerLeave = () => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  };
-
-  return (
-    <button
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerLeave}
-      // Disable context menu on mobile to prevent standard long-press menus
-      onContextMenu={(e) => e.preventDefault()}
-      className={`p-3 rounded-xl transition-all select-none touch-none ${
-        active ? 'bg-black text-white shadow-lg scale-110' : 'text-gray-500 hover:bg-gray-100'
-      }`}
-    >
-      {icon}
-    </button>
-  );
-};
+const styles = StyleSheet.create({
+    topBar: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 60,
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e5e7eb',
+        zIndex: 50,
+    },
+    topGroup: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    iconBtn: {
+        padding: 8,
+        borderRadius: 20,
+        backgroundColor: '#f3f4f6',
+    },
+    addBtn: {
+        padding: 8,
+        borderRadius: 20,
+        backgroundColor: '#eff6ff',
+    },
+    pageControls: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f3f4f6',
+        borderRadius: 20,
+        padding: 4,
+    },
+    navBtn: {
+        padding: 6,
+    },
+    disabled: {
+        opacity: 0.3,
+    },
+    pageInfo: {
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        maxWidth: 150,
+    },
+    pageTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#1f2937',
+    },
+    pageCount: {
+        fontSize: 10,
+        color: '#6b7280',
+    },
+    bottomBar: {
+        position: 'absolute',
+        bottom: 30,
+        left: '10%',
+        right: '10%',
+        backgroundColor: 'rgba(255,255,255,0.95)',
+        borderRadius: 16,
+        padding: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 10,
+        borderWidth: 1,
+        borderColor: '#f3f4f6',
+    },
+    toolRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    separator: {
+        width: 1,
+        height: 24,
+        backgroundColor: '#e5e7eb',
+        marginHorizontal: 4,
+    },
+    toolBtn: {
+        padding: 10,
+        borderRadius: 12,
+    },
+    toolBtnActive: {
+        backgroundColor: '#000',
+        transform: [{ scale: 1.1 }],
+    },
+    colorRow: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 12,
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: '#f3f4f6',
+    },
+    colorDot: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+    },
+    colorActive: {
+        borderWidth: 2,
+        borderColor: '#9ca3af',
+        transform: [{ scale: 1.2 }],
+    },
+});

@@ -31,7 +31,7 @@ export interface NoteElement extends BaseElement {
   text: string;
   width: number;
   height: number;
-  color: string; // Background color for note
+  color: string;
 }
 
 export type CanvasElement = DrawElement | ShapeElement | NoteElement;
@@ -40,12 +40,4 @@ export interface Page {
   id: string;
   name: string;
   elements: CanvasElement[];
-}
-
-export interface WhiteboardState {
-  pages: Page[];
-  currentPageId: string;
-  tool: ToolType;
-  strokeColor: string;
-  strokeWidth: number;
 }

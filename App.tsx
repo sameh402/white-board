@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { View, StyleSheet, SafeAreaView, StatusBar, Alert, ActivityIndicator, Text } from 'react-native';
 import { WhiteboardCanvas } from './components/WhiteboardCanvas';
 import { Toolbar } from './components/Toolbar';
 import { PageList } from './components/PageList';
 import { useShake } from './hooks/useShake';
 import { Page, ToolType, CanvasElement } from './types';
-import { X, Smartphone, Eraser, Loader2 } from 'lucide-react';
-// @ts-ignore
-import html2canvas from 'html2canvas';
-// @ts-ignore
-import { jsPDF } from 'jspdf';
+import { Eraser, Smartphone } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 
 const STORAGE_KEY = 'expo-whiteboard-data';
 
@@ -19,7 +19,6 @@ const INITIAL_PAGE: Page = {
 };
 
 const App: React.FC = () => {
-  // State
   const [pages, setPages] = useState<Page[]>([INITIAL_PAGE]);
   const [currentPageId, setCurrentPageId] = useState<string>('page-1');
   const [tool, setTool] = useState<ToolType>('pen');
@@ -28,33 +27,36 @@ const App: React.FC = () => {
   const [isPageListOpen, setIsPageListOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   
-  // Shake & Clear State
   const [isShakeClearing, setIsShakeClearing] = useState(false);
   const [countdown, setCountdown] = useState(5);
 
-  // Derived State
   const currentPageIndex = pages.findIndex(p => p.id === currentPageId);
   const currentPage = pages[currentPageIndex] || pages[0];
 
-  // --- Persistence ---
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
+    const loadData = async () => {
       try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setPages(parsed);
-          setCurrentPageId(parsed[0].id);
+        const saved = await AsyncStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setPages(parsed);
+            setCurrentPageId(parsed[0].id);
+          }
         }
       } catch (e) {
-        console.error("Failed to load saved notebook");
+        console.error("Failed to load notebook", e);
       }
-    }
+    };
+    loadData();
   }, []);
 
-  const saveNotebook = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(pages));
-    console.log("Notebook saved");
+  const saveNotebook = useCallback(async () => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(pages));
+    } catch (e) {
+      console.error("Failed to save", e);
+    }
   }, [pages]);
 
   useEffect(() => {
@@ -62,60 +64,64 @@ const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [pages, saveNotebook]);
 
-  // --- PDF Export ---
+  // PDF Export logic for Expo
   const downloadPDF = async () => {
-    const element = document.getElementById('whiteboard-capture-area');
-    if (!element) return;
-    
     setIsExporting(true);
-    // Short delay to allow UI to update (show loading)
-    await new Promise(resolve => setTimeout(resolve, 100));
-
     try {
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false
+      // Construct HTML SVG
+      let svgContent = '';
+      currentPage.elements.forEach(el => {
+        if (el.type === 'pen') {
+           const d = el.points.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
+           svgContent += `<path d="${d}" stroke="${el.color}" stroke-width="${el.strokeWidth}" fill="none" stroke-linecap="round" stroke-linejoin="round" />`;
+        } else if (el.type === 'rect') {
+           const x = Math.min(el.startPoint.x, el.endPoint.x);
+           const y = Math.min(el.startPoint.y, el.endPoint.y);
+           const w = Math.abs(el.startPoint.x - el.endPoint.x);
+           const h = Math.abs(el.startPoint.y - el.endPoint.y);
+           svgContent += `<rect x="${x}" y="${y}" width="${w}" height="${h}" stroke="${el.color}" stroke-width="${el.strokeWidth}" fill="none" />`;
+        } else if (el.type === 'circle') {
+           const rx = Math.abs(el.startPoint.x - el.endPoint.x) / 2;
+           const cx = Math.min(el.startPoint.x, el.endPoint.x) + rx;
+           const cy = Math.min(el.startPoint.y, el.endPoint.y) + rx; // Assumed circle
+           svgContent += `<circle cx="${cx}" cy="${cy}" r="${rx}" stroke="${el.color}" stroke-width="${el.strokeWidth}" fill="none" />`;
+        } else if (el.type === 'line') {
+           svgContent += `<line x1="${el.startPoint.x}" y1="${el.startPoint.y}" x2="${el.endPoint.x}" y2="${el.endPoint.y}" stroke="${el.color}" stroke-width="${el.strokeWidth}" stroke-linecap="round" />`;
+        } else if (el.type === 'note') {
+           // Notes are harder to render in simple SVG print, we'll approximate with a div-like foreignObject or just a yellow rect and text
+           svgContent += `
+             <rect x="${el.x - el.width/2}" y="${el.y - el.height/2}" width="${el.width}" height="${el.height}" fill="${el.color}" />
+             <text x="${el.x - el.width/2 + 10}" y="${el.y - el.height/2 + 20}" font-family="Arial" font-size="12" fill="black">
+               ${el.text.substring(0, 50)}...
+             </text>
+           `;
+        }
       });
-      
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-      
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      
-      const widthRatio = pageWidth / canvas.width;
-      const heightRatio = pageHeight / canvas.height;
-      const ratio = Math.min(widthRatio, heightRatio);
-      
-      const canvasWidth = canvas.width * ratio;
-      const canvasHeight = canvas.height * ratio;
-      
-      const marginX = (pageWidth - canvasWidth) / 2;
-      const marginY = (pageHeight - canvasHeight) / 2;
 
-      pdf.addImage(imgData, 'PNG', marginX, marginY, canvasWidth, canvasHeight);
-      pdf.save(`${currentPage.name || 'whiteboard'}.pdf`);
+      const html = `
+        <html>
+          <body style="margin:0; padding:0;">
+            <svg width="100%" height="100%" viewBox="0 0 800 1200" xmlns="http://www.w3.org/2000/svg">
+              ${svgContent}
+            </svg>
+          </body>
+        </html>
+      `;
+
+      const { uri } = await Print.printToFileAsync({ html });
+      await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
       
     } catch (err) {
-      console.error("PDF Export failed:", err);
-      alert("Failed to export PDF.");
+      Alert.alert("Error", "Failed to generate PDF");
+      console.error(err);
     } finally {
       setIsExporting(false);
     }
   };
 
-  // --- Element Management ---
   const handleAddElement = (el: CanvasElement) => {
     setPages(prev => prev.map(p => {
-      if (p.id === currentPageId) {
-        return { ...p, elements: [...p.elements, el] };
-      }
+      if (p.id === currentPageId) return { ...p, elements: [...p.elements, el] };
       return p;
     }));
   };
@@ -123,10 +129,7 @@ const App: React.FC = () => {
   const handleUpdateNote = (id: string, text: string) => {
     setPages(prev => prev.map(p => {
       if (p.id === currentPageId) {
-        const newElements = p.elements.map(el => 
-          el.id === id && el.type === 'note' ? { ...el, text } : el
-        );
-        return { ...p, elements: newElements };
+        return { ...p, elements: p.elements.map(el => el.id === id && el.type === 'note' ? { ...el, text } : el) };
       }
       return p;
     }));
@@ -141,7 +144,6 @@ const App: React.FC = () => {
     }));
   };
 
-  // --- Page Management ---
   const addPage = () => {
     const newId = `page-${Date.now()}`;
     const newPage: Page = { id: newId, name: `Page ${pages.length + 1}`, elements: [] };
@@ -150,15 +152,11 @@ const App: React.FC = () => {
   };
 
   const nextPage = () => {
-    if (currentPageIndex < pages.length - 1) {
-      setCurrentPageId(pages[currentPageIndex + 1].id);
-    }
+    if (currentPageIndex < pages.length - 1) setCurrentPageId(pages[currentPageIndex + 1].id);
   };
 
   const prevPage = () => {
-    if (currentPageIndex > 0) {
-      setCurrentPageId(pages[currentPageIndex - 1].id);
-    }
+    if (currentPageIndex > 0) setCurrentPageId(pages[currentPageIndex - 1].id);
   };
 
   const renamePage = (id: string, newName: string) => {
@@ -167,20 +165,18 @@ const App: React.FC = () => {
 
   const deletePage = (id: string) => {
     if (pages.length <= 1) {
-        alert("Cannot delete the last page.");
+        Alert.alert("Cannot delete last page");
         return;
     }
     const idx = pages.findIndex(p => p.id === id);
     const newPages = pages.filter(p => p.id !== id);
     setPages(newPages);
-    
     if (currentPageId === id) {
         const newIdx = Math.max(0, idx - 1);
         setCurrentPageId(newPages[newIdx].id);
     }
   };
 
-  // --- Shake / Clear Logic ---
   const triggerClearSequence = useCallback(() => {
     if (!isShakeClearing) {
       setIsShakeClearing(true);
@@ -188,21 +184,7 @@ const App: React.FC = () => {
     }
   }, [isShakeClearing]);
 
-  const { requestPermission } = useShake(triggerClearSequence);
-
-  useEffect(() => {
-    const handleTouch = () => {
-      requestPermission();
-      window.removeEventListener('touchstart', handleTouch);
-      window.removeEventListener('click', handleTouch);
-    };
-    window.addEventListener('touchstart', handleTouch);
-    window.addEventListener('click', handleTouch);
-    return () => {
-      window.removeEventListener('touchstart', handleTouch);
-      window.removeEventListener('click', handleTouch);
-    };
-  }, [requestPermission]);
+  useShake(triggerClearSequence);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
@@ -219,10 +201,10 @@ const App: React.FC = () => {
   }, [isShakeClearing, countdown, currentPageId]);
 
   return (
-    <div className="h-screen w-screen bg-gray-50 flex flex-col overflow-hidden font-sans">
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
       
-      {/* Main Canvas Area */}
-      <div className="flex-1 relative" id="whiteboard-capture-area">
+      <View style={styles.canvasContainer}>
         <WhiteboardCanvas 
           elements={currentPage.elements}
           tool={tool}
@@ -232,9 +214,8 @@ const App: React.FC = () => {
           onUpdateNote={handleUpdateNote}
           onDeleteElement={handleDeleteElement}
         />
-      </div>
+      </View>
 
-      {/* Floating Toolbar */}
       <Toolbar 
         currentTool={tool}
         setTool={setTool}
@@ -252,7 +233,6 @@ const App: React.FC = () => {
         onClearPage={triggerClearSequence}
       />
 
-      {/* Page List Modal */}
       {isPageListOpen && (
         <PageList 
           pages={pages}
@@ -265,38 +245,105 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* Loading Overlay for Export */}
       {isExporting && (
-        <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center">
-            <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center">
-                <Loader2 size={32} className="animate-spin text-blue-600 mb-2" />
-                <p className="font-semibold text-gray-700">Generating PDF...</p>
-            </div>
-        </div>
+        <View style={styles.loadingOverlay}>
+            <View style={styles.loadingBox}>
+                <ActivityIndicator size="large" color="#2563eb" />
+                <Text style={styles.loadingText}>Generating PDF...</Text>
+            </View>
+        </View>
       )}
 
-      {/* Shake/Clear Confirmation Overlay */}
       {isShakeClearing && (
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center text-white animate-in fade-in duration-200">
-          <div className="mb-8 p-6 bg-white/10 rounded-full">
-            <Eraser size={64} className="animate-pulse" />
-          </div>
-          <h2 className="text-3xl font-bold mb-2">Clearing Page...</h2>
-          <p className="text-white/60 mb-4">Shake detected or Eraser held</p>
-          <div className="text-9xl font-black text-red-500 mb-8 font-mono tabular-nums">
-            {countdown}
-          </div>
-          <button 
-            onClick={() => setIsShakeClearing(false)}
-            className="px-8 py-3 bg-white text-black text-lg font-bold rounded-full hover:bg-gray-200 hover:scale-105 transition-all flex items-center gap-2"
-          >
-            <X size={24} />
-            CANCEL
-          </button>
-        </div>
+        <View style={styles.clearOverlay}>
+          <View style={styles.iconContainer}>
+            <Smartphone size={64} color="white" />
+          </View>
+          <Text style={styles.clearTitle}>Clearing Page...</Text>
+          <Text style={styles.clearSub}>Shake detected</Text>
+          <Text style={styles.countdown}>{countdown}</Text>
+          <View style={styles.cancelButtonContainer}>
+             {/* Native Button wrapper to handle touches */}
+             <Text 
+                onPress={() => setIsShakeClearing(false)}
+                style={styles.cancelButton}
+             >
+                CANCEL
+             </Text>
+          </View>
+        </View>
       )}
-    </div>
+    </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  canvasContainer: {
+    flex: 1,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  loadingBox: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  clearOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  iconContainer: {
+    marginBottom: 20,
+    padding: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 50,
+  },
+  clearTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 8,
+  },
+  clearSub: {
+    color: 'rgba(255,255,255,0.6)',
+    marginBottom: 20,
+  },
+  countdown: {
+    fontSize: 120,
+    fontWeight: 'bold',
+    color: '#ef4444',
+    marginBottom: 40,
+  },
+  cancelButtonContainer: {
+     backgroundColor: 'white',
+     borderRadius: 30,
+     overflow: 'hidden',
+  },
+  cancelButton: {
+      paddingHorizontal: 32,
+      paddingVertical: 16,
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: 'black',
+  }
+});
 
 export default App;

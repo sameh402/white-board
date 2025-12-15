@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { View, Text, Modal, TouchableOpacity, ScrollView, TextInput, StyleSheet, FlatList } from 'react-native';
 import { Page } from '../types';
-import { Plus, X, Edit2, Check, Trash2, FileText } from 'lucide-react';
+import { Plus, X, Edit2, Check, Trash2, FileText } from 'lucide-react-native';
 
 interface PageListProps {
   pages: Page[];
@@ -37,94 +38,189 @@ export const PageList: React.FC<PageListProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200">
-      <div 
-        className="bg-white w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[80vh] overflow-hidden animate-in slide-in-from-bottom-10 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
-          <div className="flex items-center gap-2">
-            <FileText className="text-blue-600" />
-            <h2 className="text-lg font-bold text-gray-800">My Notebook</h2>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full text-gray-500">
-            <X size={20} />
-          </button>
-        </div>
-        
-        <div className="overflow-y-auto p-4 space-y-2 flex-1">
-          {pages.map(page => (
-            <div 
-              key={page.id} 
-              className={`p-3 rounded-xl border flex items-center justify-between group transition-all cursor-pointer ${
-                activePageId === page.id 
-                  ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' 
-                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-              }`}
-              onClick={() => {
-                if (editingId !== page.id) {
-                  onSelectPage(page.id);
-                  onClose();
-                }
-              }}
-            >
-              {editingId === page.id ? (
-                <div className="flex-1 flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                  <input
-                    autoFocus
-                    className="flex-1 p-2 border border-blue-300 rounded-lg outline-none text-sm"
-                    value={editName}
-                    onChange={e => setEditName(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && saveEdit()}
-                    onBlur={saveEdit}
-                  />
-                  <button onClick={saveEdit} className="text-green-600 p-2 hover:bg-green-50 rounded-lg"><Check size={18} /></button>
-                </div>
-              ) : (
-                <>
-                  <div className="flex flex-col">
-                    <span className={`font-semibold text-sm ${activePageId === page.id ? 'text-blue-700' : 'text-gray-800'}`}>
-                      {page.name}
-                    </span>
-                    <span className="text-xs text-gray-400">
-                      {page.elements.length} items
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center gap-1">
-                     <button 
-                       onClick={(e) => { e.stopPropagation(); startEdit(page); }}
-                       className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                       title="Rename"
-                     >
-                       <Edit2 size={16} />
-                     </button>
-                     {pages.length > 1 && (
-                       <button 
-                         onClick={(e) => { e.stopPropagation(); onDeletePage(page.id); }}
-                         className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                         title="Delete"
-                       >
-                         <Trash2 size={16} />
-                       </button>
-                     )}
-                  </div>
-                </>
-              )}
-            </div>
-          ))}
-        </div>
+    <Modal visible animationType="slide" transparent>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.header}>
+            <View style={styles.titleRow}>
+               <FileText size={20} color="#2563eb" />
+               <Text style={styles.title}>My Notebook</Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+              <X size={20} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
 
-        <div className="p-4 border-t border-gray-100 bg-gray-50">
-          <button 
-            onClick={() => { onAddPage(); }}
-            className="w-full py-3 bg-black text-white rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-gray-800 active:scale-95 transition-all shadow-lg shadow-gray-200"
-          >
-            <Plus size={20} />
-            Create New Page
-          </button>
-        </div>
-      </div>
-    </div>
+          <FlatList
+            data={pages}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.listContent}
+            renderItem={({ item: page }) => (
+               <TouchableOpacity 
+                 style={[
+                    styles.pageItem, 
+                    activePageId === page.id && styles.activePage
+                 ]}
+                 onPress={() => {
+                   if (editingId !== page.id) {
+                     onSelectPage(page.id);
+                     onClose();
+                   }
+                 }}
+               >
+                 {editingId === page.id ? (
+                    <View style={styles.editRow}>
+                      <TextInput 
+                        style={styles.input}
+                        value={editName}
+                        onChangeText={setEditName}
+                        autoFocus
+                        onBlur={saveEdit}
+                      />
+                      <TouchableOpacity onPress={saveEdit}>
+                        <Check size={18} color="#16a34a" />
+                      </TouchableOpacity>
+                    </View>
+                 ) : (
+                    <>
+                      <View style={styles.pageInfo}>
+                         <Text style={[styles.pageName, activePageId === page.id && styles.activeText]}>
+                            {page.name}
+                         </Text>
+                         <Text style={styles.pageMeta}>{page.elements.length} items</Text>
+                      </View>
+                      
+                      <View style={styles.actions}>
+                         <TouchableOpacity onPress={() => startEdit(page)} style={styles.actionBtn}>
+                            <Edit2 size={16} color="#9ca3af" />
+                         </TouchableOpacity>
+                         {pages.length > 1 && (
+                            <TouchableOpacity onPress={() => onDeletePage(page.id)} style={styles.actionBtn}>
+                               <Trash2 size={16} color="#ef4444" />
+                            </TouchableOpacity>
+                         )}
+                      </View>
+                    </>
+                 )}
+               </TouchableOpacity>
+            )}
+          />
+
+          <View style={styles.footer}>
+            <TouchableOpacity onPress={onAddPage} style={styles.createBtn}>
+               <Plus size={20} color="white" />
+               <Text style={styles.createBtnText}>Create New Page</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 };
+
+const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    height: '70%',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  listContent: {
+    padding: 16,
+  },
+  pageItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    marginBottom: 8,
+    backgroundColor: '#fff',
+  },
+  activePage: {
+    borderColor: '#3b82f6',
+    backgroundColor: '#eff6ff',
+  },
+  pageInfo: {
+    flex: 1,
+  },
+  pageName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  activeText: {
+    color: '#1d4ed8',
+  },
+  pageMeta: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionBtn: {
+    padding: 8,
+  },
+  editRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  input: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+    borderRadius: 8,
+    padding: 8,
+  },
+  footer: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+  createBtn: {
+    backgroundColor: '#000',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 16,
+    gap: 8,
+  },
+  createBtnText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+});

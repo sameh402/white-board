@@ -1,6 +1,7 @@
-import React, { useRef, useEffect } from 'react';
+import React from 'react';
+import { View, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { NoteElement } from '../types';
-import { Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react-native';
 
 interface StickyNoteProps {
   note: NoteElement;
@@ -17,52 +18,69 @@ export const StickyNote: React.FC<StickyNoteProps> = ({
   onDelete,
   onSelect,
 }) => {
-  const textAreaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Auto-focus if just created (empty text)
-  useEffect(() => {
-    if (note.text === '' && textAreaRef.current && isSelected) {
-      textAreaRef.current.focus();
-    }
-  }, [note.id, isSelected]);
-
   return (
-    <div
-      className={`absolute shadow-lg flex flex-col transition-transform duration-200 ${
-        isSelected ? 'z-30 scale-105 ring-2 ring-blue-500' : 'z-10'
-      }`}
-      style={{
-        left: note.x,
-        top: note.y,
-        width: note.width,
-        height: note.height,
-        backgroundColor: note.color,
-        transform: 'translate(-50%, -50%)', // Center the note on the click point
-      }}
-      onClick={(e) => {
-        e.stopPropagation();
-        onSelect(note.id);
+    <View
+      style={[
+        styles.container,
+        {
+          left: note.x - note.width / 2, // Center positioning logic
+          top: note.y - note.height / 2,
+          width: note.width,
+          height: note.height,
+          backgroundColor: note.color,
+          zIndex: isSelected ? 30 : 10,
+          borderColor: isSelected ? '#3b82f6' : 'transparent',
+          borderWidth: isSelected ? 2 : 0,
+        },
+      ]}
+      onTouchEnd={(e) => {
+          e.stopPropagation();
+          onSelect(note.id);
       }}
     >
-      <div className="flex justify-end p-1 bg-black/5">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(note.id);
-          }}
-          className="text-gray-600 hover:text-red-500"
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => onDelete(note.id)}
+          style={styles.deleteBtn}
         >
-          <Trash2 size={14} />
-        </button>
-      </div>
-      <textarea
-        ref={textAreaRef}
+          <Trash2 size={16} color="#4b5563" />
+        </TouchableOpacity>
+      </View>
+      <TextInput
         value={note.text}
-        onChange={(e) => onUpdate(note.id, e.target.value)}
-        className="w-full h-full p-2 bg-transparent resize-none border-none outline-none font-handwriting text-gray-800"
+        onChangeText={(text) => onUpdate(note.id, text)}
+        multiline
+        style={styles.input}
         placeholder="Type here..."
-        style={{ fontFamily: '"Comic Sans MS", "Chalkboard SE", sans-serif' }}
+        placeholderTextColor="#6b7280"
+        onFocus={() => onSelect(note.id)}
       />
-    </div>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  header: {
+    alignItems: 'flex-end',
+    padding: 4,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  deleteBtn: {
+    padding: 2,
+  },
+  input: {
+    flex: 1,
+    padding: 8,
+    textAlignVertical: 'top',
+    fontSize: 14,
+    color: '#1f2937',
+  },
+});
